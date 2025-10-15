@@ -1,6 +1,8 @@
 # Tweet Sentiment Transformers
 Sentiment analysis on TweetEval using RoBERTa and DistilBERT
 
+---
+
 This repository contains code for exploring how large pretrained Transformer models can be adapted to specific downstream tasks. 
 
 The goal is to compare the performance and efficiency of RoBERTa and DistilBERT under two strategies:
