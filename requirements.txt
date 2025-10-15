@@ -1,0 +1,6 @@
+transformers>=4.40.0
+datasets
+peft
+scikit-learn
+numpy
+torch
