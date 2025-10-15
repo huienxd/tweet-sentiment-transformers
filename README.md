@@ -65,6 +65,12 @@ LoRA results: ...
 ---
 ## Reference
 
+Barbieri, F., Camacho-Collados, J., Espinosa-Anke, L., & Neves, L. (2020). TweetEval: Unified Benchmark for Tweet Classification. Proceedings of Findings of EMNLP 2020.
+
+Hu, E. J. et al. (2021). LoRA: Low-Rank Adaptation of Large Language Models. arXiv:2106.09685.
+
+Rosenthal, S., Farra, N., & Nakov, P. (2017). SemEval-2017 Task 4: Sentiment Analysis in Twitter. Proceedings of SemEval-2017.
+
 
 ---
 ## Citation
