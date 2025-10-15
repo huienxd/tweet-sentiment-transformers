@@ -1,7 +1,7 @@
 from utils import load_model_and_tokenizer, load_data, full_finetuning, lora, compute_metrics
 
 def run(model_name, target_modules):
-    print(f"\ncurrent model: {model_name}\n")
+    print(f"\nRunning experiments for: {model_name}\n")
     
     model, tokenizer = load_model_and_tokenizer(model_name)
     train_df, val_df, test_df = load_data(tokenizer)
