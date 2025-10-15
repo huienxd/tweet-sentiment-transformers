@@ -1,37 +1,104 @@
-from utils import load_model_and_tokenizer, load_data, full_finetuning, lora, compute_metrics
+from datasets import load_dataset, DatasetDict
+from transformers import TrainingArguments, Trainer, AutoTokenizer, AutoModelForSequenceClassification
+from sklearn.metrics import matthews_corrcoef, precision_recall_fscore_support, accuracy_score
+from peft import LoraConfig, get_peft_model, TaskType
+import numpy as np
 
-def run(model_name, target_modules):
-    print(f"\ncurrent model: {model_name}\n")
+
+## load model & tokenizer
+def load_model_and_tokenizer(model_name, num_labels=3):
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+    return model, tokenizer
+
+def tokenize_function(examples, tokenizer):
+    return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=128)
+
+
+## load & prepare dataset
+def load_data(tokenizer):
+    df = load_dataset("cardiffnlp/tweet_eval", "sentiment")
+    tokenized_df = df.map(lambda x: tokenize_function(x, tokenizer), batched=True)
+    return tokenized_df["train"], tokenized_df["validation"], tokenized_df["test"]
+
+
+## full fine-tuning
+def full_finetuning(model, train_df, val_df, tokenizer, compute_metrics):
     
-    model, tokenizer = load_model_and_tokenizer(model_name)
-    train_df, val_df, test_df = load_data(tokenizer)
+    ## training arguments
+    training_args = TrainingArguments(
+        output_dir="./results",
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        learning_rate=2e-5,
+        per_device_train_batch_size=16,
+        per_device_eval_batch_size=16,
+        num_train_epochs=3,
+        weight_decay=0.01,
+        logging_dir="./logs",
+    )
 
-    ## full fine-tuning
-    trainer_full = full_finetuning(model, train_df, val_df, tokenizer, compute_metrics)
-    trainer_full.train()
-    results_full = trainer_full.evaluate(test_df)
-    print("Full fine-tuning results:", results_full)
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_df,
+        eval_dataset=val_df,
+        processing_class=tokenizer,
+        compute_metrics=compute_metrics,
+    )
 
-    # lora fine-tuning
-    model, tokenizer = load_model_and_tokenizer(model_name)  # reload clean model
-    trainer_lora = lora(model, target_modules, train_df, val_df, tokenizer, compute_metrics)
-    trainer_lora.train()
-    results_lora = trainer_lora.evaluate(test_df)
-    print("LoRA results:", results_lora)
+    return trainer
 
 
-if __name__ == "__main__":
-    # define models + corresponding LoRA target modules
-    experiments = [
-        {
-            "model_name": "cardiffnlp/twitter-roberta-base-sentiment",
-            "target_modules": ["query", "value"]
-        },
-        {
-            "model_name": "bhadresh-savani/distilbert-base-uncased-emotion",
-            "target_modules": ["q_lin", "v_lin"]
-        }
-    ]
+## lora fine-tuning
+def lora(model, target_modules, train_df, val_df, tokenizer, compute_metrics):
 
-    for exp in experiments:
-        run(exp["model_name"], exp["target_modules"])
+    ## training arguments
+    training_args = TrainingArguments(
+        output_dir="./results",
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        learning_rate=2e-5,
+        per_device_train_batch_size=16,
+        per_device_eval_batch_size=16,
+        num_train_epochs=3,
+        weight_decay=0.01,
+        logging_dir="./logs",
+    )
+
+    lora_config = LoraConfig(
+        task_type=TaskType.SEQ_CLS,
+        r=8,                            ## rank
+        lora_alpha=32,
+        lora_dropout=0.1,
+        target_modules=target_modules
+    )
+
+    lora_model = get_peft_model(model, lora_config)
+
+    trainer_lora = Trainer(
+        model=lora_model,
+        args=training_args,
+        train_dataset = train_df,
+        eval_dataset=val_df,
+        processing_class=tokenizer,
+        compute_metrics=compute_metrics,
+    )
+
+    return trainer_lora
+
+
+## metrics (evaluation)
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = np.argmax(logits, axis=-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, preds, average='weighted')
+    acc = accuracy_score(labels, preds)
+    mcc = matthews_corrcoef(labels, preds)
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "mcc": mcc
+    }
