@@ -1,15 +1,19 @@
 from datasets import load_dataset, DatasetDict
 from transformers import TrainingArguments, Trainer, AutoTokenizer, AutoModelForSequenceClassification
-from sklearn.metrics import matthews_corrcoef, precision_recall_fscore_support, accuracy_score
+from sklearn.metrics import matthews_corrcoef, precision_recall_fscore_support, accuracy_score, classification_report
 from peft import LoraConfig, get_peft_model, TaskType
+import pandas as pd
 import numpy as np
 
 
 ## load model & tokenizer
 def load_model_and_tokenizer(model_name, num_labels=3):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_name, num_labels=num_labels, ignore_mismatched_sizes=True
+    )
     return model, tokenizer
+
 
 def tokenize_function(examples, tokenizer):
     return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=128)
@@ -102,3 +106,50 @@ def compute_metrics(eval_pred):
         "f1": f1,
         "mcc": mcc
     }
+
+## error analysis
+def error_analysis(test_df, labels, preds_full, preds_lora, save_path="error_analysis.csv", num_examples=5):
+    if isinstance(test_df, dict) or hasattr(test_df, "to_dict"):
+        texts = test_df["text"]
+    else:
+        raise ValueError("Expected Hugging Face dataset with a 'text' column.")
+
+    df = pd.DataFrame({
+        "text": texts,
+        "label": labels,
+        "pred_full": preds_full,
+        "pred_lora": preds_lora
+    })
+
+    df["full_correct"] = df["label"] == df["pred_full"]
+    df["lora_correct"] = df["label"] == df["pred_lora"]
+
+    # error categories
+    df["error_type"] = "both_correct"
+    df.loc[(~df["full_correct"]) & (~df["lora_correct"]), "error_type"] = "both_wrong"
+    df.loc[(df["full_correct"]) & (~df["lora_correct"]), "error_type"] = "full_better"
+    df.loc[(~df["full_correct"]) & (df["lora_correct"]), "error_type"] = "lora_better"
+
+    # Save all errors
+    df.to_csv(save_path, index=False)
+    print(f"\nError analysis saved to: {save_path}")
+
+    # Print classification reports
+    print("\nFull Fine-tuning Classification Report:")
+    print(classification_report(df["label"], df["pred_full"]))
+
+    print("\nLoRA Fine-tuning Classification Report:")
+    print(classification_report(df["label"], df["pred_lora"]))
+
+    # Print a few example misclassifications
+    print("\nExamples Where LoRA is correct but Full is wrong")
+    lora_better = df[df["error_type"] == "lora_better"].head(num_examples)
+    for _, row in lora_better.iterrows():
+        print(f"\nText: {row['text']}")
+        print(f"Label: {row['label']} | Full: {row['pred_full']} | LoRA: {row['pred_lora']}")
+
+    print("\nExamples Where Full is correct but LoRA is wrong")
+    full_better = df[df["error_type"] == "full_better"].head(num_examples)
+    for _, row in full_better.iterrows():
+        print(f"\nText: {row['text']}")
+        print(f"Label: {row['label']} | Full: {row['pred_full']} | LoRA: {row['pred_lora']}")
