@@ -19,6 +19,18 @@ def run(model_name, target_modules):
     results_lora = trainer_lora.evaluate(test_df)
     print("LoRA results:", results_lora)
 
+     # evaluate and collect predictions
+    predictions_full = trainer_full.predict(test_df)
+    predictions_lora = trainer_lora.predict(test_df)
+
+    labels = predictions_full.label_ids
+    preds_full = np.argmax(predictions_full.predictions, axis=-1)
+    preds_lora = np.argmax(predictions_lora.predictions, axis=-1)
+
+    # Error analysis
+    error_analysis(test_df, labels, preds_full, preds_lora, save_path=f"{model_name.replace('/', '_')}_errors.csv")
+
+
 
 if __name__ == "__main__":
     # define models + corresponding LoRA target modules
