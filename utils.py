@@ -130,18 +130,18 @@ def error_analysis(test_df, labels, preds_full, preds_lora, save_path="error_ana
     df.loc[(df["full_correct"]) & (~df["lora_correct"]), "error_type"] = "full_better"
     df.loc[(~df["full_correct"]) & (df["lora_correct"]), "error_type"] = "lora_better"
 
-    # Save all errors
+    # save all errors
     df.to_csv(save_path, index=False)
     print(f"\nError analysis saved to: {save_path}")
 
-    # Print classification reports
+    # print classification reports
     print("\nFull Fine-tuning Classification Report:")
     print(classification_report(df["label"], df["pred_full"]))
 
     print("\nLoRA Fine-tuning Classification Report:")
     print(classification_report(df["label"], df["pred_lora"]))
 
-    # Print a few example misclassifications
+    # print a few example misclassifications
     print("\nExamples Where LoRA is correct but Full is wrong")
     lora_better = df[df["error_type"] == "lora_better"].head(num_examples)
     for _, row in lora_better.iterrows():
